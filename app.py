@@ -359,9 +359,9 @@ def process_chat(user_query, image_file):
 # ---------------------------
 # API Keys (set these in your environment)
 # ---------------------------
-gemini_api_key = os.getenv("GEMINI_API_KEY")
-av_api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
-news_api_key = os.getenv("NEWS_API_KEY")
+gemini_api_key = "AIzaSyB_u-Y8O422aIKG5ga_Ae7bN8q-6YKnx8E"          # Your Gemini API key
+av_api_key = "4MK98IQRF8RTSYQ3"         # Your Alpha Vantage API key
+news_api_key = "1a0c8951c92b4906b50f9dc0b1186174"
 
 # ---------------------------
 # Enhanced Gradio Interface using Blocks and Tabs
