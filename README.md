@@ -9,7 +9,7 @@ app_file: app.py
 pinned: false
 ---
 
-![Alt text](roject_Wireframe.png)
+![Alt text](project_Wireframe.png)
 
 # Financial Assistant Chatbot
 
