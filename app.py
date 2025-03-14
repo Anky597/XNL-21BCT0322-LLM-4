@@ -7,6 +7,7 @@ import requests
 import re
 from PIL import Image
 import base64
+import os
 
 # ---------------------------
 # Setup the embedding model
@@ -58,7 +59,6 @@ documents = [
         "text": "New regulations in the European financial sector are expected to reshape market dynamics, with a focus on enhancing transparency and investor protection.",
         "metadata": {"region": "Europe", "regulator": "European Commission", "sentiment": "positive", "date": "2025-04-07"}
     },
-    
     # New entries
     {
         "text": "Tesla (TSLA) stock has faced significant challenges in Q1 2025, with deliveries tracking approximately 31,000 units lower than Q1 2024. Wall Street analysts have revised delivery estimates downward to around 356,000 vehicles.",
@@ -162,12 +162,13 @@ documents = [
     }
 ]
 
-
+# ---------------------------
 # Prepare document texts and compute embeddings
+# ---------------------------
 doc_texts = [doc["text"] for doc in documents]
 doc_embeddings = embedding_model.encode(doc_texts, convert_to_numpy=True).astype("float32")
 dimension = doc_embeddings.shape[1]
-nlist = 10  # Number of clusters; can be tuned based on dataset size
+nlist = 2  # Reduced number of clusters for small dataset
 
 # Create a quantizer for L2 distance (similar to IndexFlatL2)
 quantizer = faiss.IndexFlatL2(dimension)
@@ -339,11 +340,13 @@ def analyze_image(file_path, gemini_api_key):
         return f"Error processing image: {e}"
 
 # ---------------------------
-# API Keys (Replace with your actual keys)
+# API Keys (Replace with your actual keys or use environment variables)
 # ---------------------------
-gemini_api_key = "AIzaSyB_u-Y8O422aIKG5ga_Ae7bN8q-6YKnx8E"  # Your Gemini API key
-av_api_key = "4MK98IQRF8RTSYQ3"  # Your Alpha Vantage API key
-news_api_key = "1a0c8951c92b4906b50f9dc0b1186174"  # Your NewsAPI key
+
+
+gemini_api_key = "AIzaSyB_u-Y8O422aIKG5ga_Ae7bN8q-6YKnx8E"          # Your Gemini API key
+av_api_key = "4MK98IQRF8RTSYQ3"         # Your Alpha Vantage API key
+news_api_key = "1a0c8951c92b4906b50f9dc0b1186174"
 
 # ---------------------------
 # Gradio Chatbot Function
@@ -355,7 +358,6 @@ def process_chat(user_query, image_file):
         if image_file is None:
             return "No image provided. Please upload an image file."
         else:
-            # In Gradio, file upload may return a file path or an object with a .name attribute.
             file_path = image_file.name if hasattr(image_file, "name") else image_file
             return analyze_image(file_path, gemini_api_key)
 
@@ -392,7 +394,7 @@ iface = gr.Interface(
     fn=process_chat,
     inputs=[
         gr.Textbox(label="Enter your query", placeholder="Type your financial query here..."),
-        gr.File(label="Upload image (optional)", file_types=[".png", ".jpg", ".jpeg"], optional=True)
+        gr.File(label="Upload image (optional)", file_types=[".png", ".jpg", ".jpeg"])
     ],
     outputs="text",
     title="Financial Assistant Chatbot",
