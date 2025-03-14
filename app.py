@@ -164,22 +164,17 @@ documents = [
     }
 ]
 
+
 # ---------------------------
 # Prepare document texts and compute embeddings
 # ---------------------------
 doc_texts = [doc["text"] for doc in documents]
 doc_embeddings = embedding_model.encode(doc_texts, convert_to_numpy=True).astype("float32")
 dimension = doc_embeddings.shape[1]
-nlist = 10  # Number of clusters; can be tuned based on dataset size
 
-# Create a quantizer for L2 distance (similar to IndexFlatL2)
-quantizer = faiss.IndexFlatL2(dimension)
-# Use an IVF index for faster approximate nearest neighbor search
-index = faiss.IndexIVFFlat(quantizer, dimension, nlist, faiss.METRIC_L2)
-
-# Train the IVF index on our document embeddings (required before adding vectors)
-if not index.is_trained:
-    index.train(doc_embeddings)
+# Use a flat index instead of IVF since we have a small number of documents
+# This avoids the clustering warning
+index = faiss.IndexFlatL2(dimension)
 
 # Add the embeddings to the index
 index.add(doc_embeddings)
@@ -435,9 +430,9 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
     
     chatbot = gr.Chatbot(
         avatar_images=[None, "https://i.postimg.cc/2j3QT37V/fin-bot-avatar.png"],
-        bubble_full_width=False,
         height=500,
-        show_copy_button=True
+        show_copy_button=True,
+        type="messages"
     )
     
     with gr.Row():
@@ -464,16 +459,17 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
         file_output,
     )
     
+    def clear_upload():
+        return None
+        
     msg.submit(
         process_message, 
         [msg, chatbot, file_output], 
         [chatbot]
     ).then(
-        lambda: None, None, file_output, 
-        _js="""() => {
-            document.querySelector(".upload-button input[type='file']").value = '';
-            return null;
-        }"""
+        clear_upload, 
+        None, 
+        file_output
     )
     
     # Example questions for quick access
