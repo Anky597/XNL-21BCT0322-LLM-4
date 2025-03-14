@@ -59,6 +59,7 @@ documents = [
         "text": "New regulations in the European financial sector are expected to reshape market dynamics, with a focus on enhancing transparency and investor protection.",
         "metadata": {"region": "Europe", "regulator": "European Commission", "sentiment": "positive", "date": "2025-04-07"}
     },
+    
     # New entries
     {
         "text": "Tesla (TSLA) stock has faced significant challenges in Q1 2025, with deliveries tracking approximately 31,000 units lower than Q1 2024. Wall Street analysts have revised delivery estimates downward to around 356,000 vehicles.",
@@ -162,24 +163,18 @@ documents = [
     }
 ]
 
-# ---------------------------
+
 # Prepare document texts and compute embeddings
-# ---------------------------
 doc_texts = [doc["text"] for doc in documents]
 doc_embeddings = embedding_model.encode(doc_texts, convert_to_numpy=True).astype("float32")
 dimension = doc_embeddings.shape[1]
-nlist = 10  # Number of clusters; can be tuned based on dataset size
+nlist = 10  # Number of clusters
 
-# Create a quantizer for L2 distance (similar to IndexFlatL2)
+# Create a quantizer for L2 distance and build a FAISS IVF index
 quantizer = faiss.IndexFlatL2(dimension)
-# Use an IVF index for faster approximate nearest neighbor search
 index = faiss.IndexIVFFlat(quantizer, dimension, nlist, faiss.METRIC_L2)
-
-# Train the IVF index on our document embeddings (required before adding vectors)
 if not index.is_trained:
     index.train(doc_embeddings)
-
-# Add the embeddings to the index
 index.add(doc_embeddings)
 
 # ---------------------------
@@ -195,7 +190,7 @@ def call_gemini_llm(prompt, gemini_api_key, model="gemini-2.0-flash"):
         return f"Error calling Gemini API: {e}"
 
 # ---------------------------
-# Conversion: Company Name to Ticker Symbol using Gemini LLM
+# Conversion: Company Name to Ticker Symbol
 # ---------------------------
 def convert_company_to_ticker(company_name, gemini_api_key):
     conversion_prompt = (
@@ -207,7 +202,6 @@ def convert_company_to_ticker(company_name, gemini_api_key):
     return ticker.strip().upper()
 
 def extract_stock_symbol(query, gemini_api_key):
-    # Updated regex to also match "stock price of"
     pattern = r"(?:price of|stock price of|stock price for|quote for)\s+([A-Za-z]+)"
     match = re.search(pattern, query, re.IGNORECASE)
     if match:
@@ -251,7 +245,7 @@ def get_stock_quote_alpha_vantage(symbol, av_api_key):
         return f"Error retrieving stock data for {symbol}: {e}"
 
 # ---------------------------
-# NewsAPI Integration: Fetch Company News Headlines (English only)
+# NewsAPI Integration: Fetch Company News Headlines
 # ---------------------------
 def fetch_company_news(company, news_api_key, count=5):
     url = "https://newsapi.org/v2/everything"
@@ -274,9 +268,6 @@ def fetch_company_news(company, news_api_key, count=5):
     except Exception as e:
         return []
 
-# ---------------------------
-# Sentiment Analysis using News Headlines and Gemini LLM
-# ---------------------------
 def perform_sentiment_analysis(company, news_api_key, gemini_api_key):
     headlines = fetch_company_news(company, news_api_key, count=5)
     if not headlines:
@@ -288,31 +279,20 @@ def perform_sentiment_analysis(company, news_api_key, gemini_api_key):
     analysis = call_gemini_llm(prompt, gemini_api_key)
     return analysis
 
-# ---------------------------
-# Extract Company Name for Sentiment Analysis
-# ---------------------------
 def extract_company_name_for_sentiment(query):
     pattern = r"sentiment analysis (?:of|on)\s+([A-Za-z\s]+?)\s+stock"
     match = re.search(pattern, query, re.IGNORECASE)
     if match:
-        company = match.group(1).strip()
-        return company
+        return match.group(1).strip()
     return None
 
-# ---------------------------
-# Extract Company Name for News Query with Improved Regex
-# ---------------------------
 def extract_company_name_for_news(query):
     pattern = r"news\s+(?:related\s+to|about|for)\s+((?:[A-Za-z]+\s*)+)(?:stock)?"
     match = re.search(pattern, query, re.IGNORECASE)
     if match:
-        company = match.group(1).strip()
-        return company
+        return match.group(1).strip()
     return None
 
-# ---------------------------
-# Get Stock News Function using NewsAPI
-# ---------------------------
 def get_stock_news(company, news_api_key, count=5):
     headlines = fetch_company_news(company, news_api_key, count)
     if not headlines:
@@ -323,7 +303,7 @@ def get_stock_news(company, news_api_key, count=5):
     return result
 
 # ---------------------------
-# Analyze Uploaded Image/Graph Functionality (Direct Image Upload to Gemini LLM)
+# Analyze Uploaded Image/Graph Functionality
 # ---------------------------
 def analyze_image(file_path, gemini_api_key):
     try:
@@ -341,17 +321,13 @@ def analyze_image(file_path, gemini_api_key):
         return f"Error processing image: {e}"
 
 # ---------------------------
-# Gradio Chatbot Function
+# Process Chat: Main Function with Enhanced UI/UX
 # ---------------------------
 def process_chat(user_query, image_file):
-    # Branch: Image/Graph Analysis
-    image_triggers = ["upload image", "analyze image", "upload graph", "analyze graph", "upload chart", "analyze chart"]
-    if image_file is not None or any(trigger in user_query.lower() for trigger in image_triggers):
-        if image_file is None:
-            return "No image provided. Please upload an image file."
-        else:
-            file_path = image_file.name if hasattr(image_file, "name") else image_file
-            return analyze_image(file_path, gemini_api_key)
+    # Check if the user is using the Image Analysis tab
+    if image_file is not None:
+        file_path = image_file.name if hasattr(image_file, "name") else image_file
+        return analyze_image(file_path, gemini_api_key)
 
     # Branch: Sentiment Analysis
     if "sentiment analysis" in user_query.lower():
@@ -359,7 +335,7 @@ def process_chat(user_query, image_file):
         if company:
             return perform_sentiment_analysis(company, news_api_key, gemini_api_key)
         else:
-            return "Unable to extract company name for sentiment analysis."
+            return "Unable to extract company name for sentiment analysis. Please include the company name clearly."
 
     # Branch: Fetch News Headlines
     if "news" in user_query.lower():
@@ -371,34 +347,60 @@ def process_chat(user_query, image_file):
 
     # Branch: Direct Stock Price Query
     ticker = extract_stock_symbol(user_query, gemini_api_key)
-    if ticker and ("stock price" in user_query.lower() or "price of" in user_query.lower() or "quote for" in user_query.lower()):
+    if ticker and any(phrase in user_query.lower() for phrase in ["stock price", "price of", "quote for"]):
         return get_stock_quote_alpha_vantage(ticker, av_api_key)
 
-    # Regular Flow: Retrieve context and pass query to Gemini LLM
+    # Default: Retrieve context and use Gemini LLM for general queries
     context = retrieve_context(user_query, top_k=2)
     combined_prompt = f"Context:\n{context}\n\nUser Query: {user_query}\n\nAnswer:"
     answer = call_gemini_llm(combined_prompt, gemini_api_key)
     return answer
 
 # ---------------------------
-# API Keys (Replace with your actual keys or use environment variables)
+# API Keys (set these in your environment)
 # ---------------------------
-gemini_api_key = "AIzaSyB_u-Y8O422aIKG5ga_Ae7bN8q-6YKnx8E"          # Your Gemini API key
-av_api_key = "4MK98IQRF8RTSYQ3"         # Your Alpha Vantage API key
-news_api_key = "1a0c8951c92b4906b50f9dc0b1186174"
+gemini_api_key = os.environ.get("GEMINI_API_KEY")
+av_api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
+news_api_key = os.environ.get("NEWS_API_KEY")
 
 # ---------------------------
-# Create Gradio Interface
+# Enhanced Gradio Interface using Blocks and Tabs
 # ---------------------------
-iface = gr.Interface(
-    fn=process_chat,
-    inputs=[
-        gr.Textbox(label="Enter your query", placeholder="Type your financial query here..."),
-        gr.File(label="Upload image (optional)", file_types=[".png", ".jpg", ".jpeg"])
-    ],
-    outputs="text",
-    title="Financial Assistant Chatbot",
-    description="Ask questions about stocks, news, and perform image analysis on financial charts."
-)
+with gr.Blocks(css=".gradio-container { max-width: 900px; margin: auto; }") as demo:
+    gr.Markdown("# Financial Assistant Chatbot")
+    gr.Markdown(
+        """
+        **Welcome!**  
+        This chatbot can help you with a variety of financial queries:
+        - **General Query:** Get context-aware answers.
+        - **Stock Price:** Retrieve the latest stock quotes.
+        - **News:** Fetch the latest financial news headlines.
+        - **Sentiment Analysis:** Analyze sentiment based on news headlines.
+        - **Image Analysis:** Upload a financial chart for detailed insights.
+        """
+    )
+    
+    with gr.Tabs():
+        with gr.TabItem("Chat Query"):
+            query_input = gr.Textbox(label="Enter your query", placeholder="Type your financial query here...")
+            chat_output = gr.Textbox(label="Response")
+        with gr.TabItem("Image Analysis"):
+            image_input = gr.File(label="Upload image (PNG, JPG, JPEG)")
+            image_output = gr.Textbox(label="Image Analysis Output")
+    
+    # Connect components: if an image is uploaded, use image tab; otherwise, use chat query
+    def route_query(query, image):
+        # If an image file is provided, process it; else process the text query.
+        if image is not None:
+            return process_chat(query, image)
+        else:
+            return process_chat(query, None)
+    
+    # Using the inputs from the Tabs (simulate a shared process)
+    btn = gr.Button("Submit")
+    output = gr.Textbox(label="Result", interactive=True)
+    
+    btn.click(route_query, inputs=[query_input, image_input], outputs=output)
 
-iface.launch()
+# Launch the enhanced interface
+demo.launch()
