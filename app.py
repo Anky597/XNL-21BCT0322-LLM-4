@@ -8,7 +8,6 @@ import re
 from PIL import Image
 import base64
 import os
-import time
 
 # ---------------------------
 # Setup the embedding model
@@ -16,7 +15,7 @@ import time
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # ---------------------------
-# Financial context documents (vector database)
+# Improved financial context documents (vector database)
 # ---------------------------
 documents = [
     # Existing entries
@@ -60,7 +59,6 @@ documents = [
         "text": "New regulations in the European financial sector are expected to reshape market dynamics, with a focus on enhancing transparency and investor protection.",
         "metadata": {"region": "Europe", "regulator": "European Commission", "sentiment": "positive", "date": "2025-04-07"}
     },
-    
     # New entries
     {
         "text": "Tesla (TSLA) stock has faced significant challenges in Q1 2025, with deliveries tracking approximately 31,000 units lower than Q1 2024. Wall Street analysts have revised delivery estimates downward to around 356,000 vehicles.",
@@ -164,17 +162,22 @@ documents = [
     }
 ]
 
-
 # ---------------------------
 # Prepare document texts and compute embeddings
 # ---------------------------
 doc_texts = [doc["text"] for doc in documents]
 doc_embeddings = embedding_model.encode(doc_texts, convert_to_numpy=True).astype("float32")
 dimension = doc_embeddings.shape[1]
+nlist = 10  # Number of clusters; can be tuned based on dataset size
 
-# Use a flat index instead of IVF since we have a small number of documents
-# This avoids the clustering warning
-index = faiss.IndexFlatL2(dimension)
+# Create a quantizer for L2 distance (similar to IndexFlatL2)
+quantizer = faiss.IndexFlatL2(dimension)
+# Use an IVF index for faster approximate nearest neighbor search
+index = faiss.IndexIVFFlat(quantizer, dimension, nlist, faiss.METRIC_L2)
+
+# Train the IVF index on our document embeddings (required before adding vectors)
+if not index.is_trained:
+    index.train(doc_embeddings)
 
 # Add the embeddings to the index
 index.add(doc_embeddings)
@@ -241,9 +244,9 @@ def get_stock_quote_alpha_vantage(symbol, av_api_key):
             price = quote.get("05. price", "N/A")
             change = quote.get("09. change", "N/A")
             change_percent = quote.get("10. change percent", "N/A")
-            return f"📈 **{symbol} Quote**: ${price}\nChange: {change} ({change_percent})"
+            return f"Alpha Vantage: The latest quote for {symbol} is ${price}, change: {change} ({change_percent})."
         else:
-            return f"Sorry, I couldn't retrieve stock data for {symbol} at the moment."
+            return f"Alpha Vantage: Unable to retrieve stock data for {symbol}."
     except Exception as e:
         return f"Error retrieving stock data for {symbol}: {e}"
 
@@ -314,9 +317,9 @@ def get_stock_news(company, news_api_key, count=5):
     headlines = fetch_company_news(company, news_api_key, count)
     if not headlines:
         return f"No news headlines found for {company}."
-    result = f"📰 **Latest News for {company}**:\n\n"
+    result = f"News headlines for {company}:\n"
     for headline in headlines:
-        result += f"• {headline}\n"
+        result += f"- {headline}\n"
     return result
 
 # ---------------------------
@@ -338,159 +341,64 @@ def analyze_image(file_path, gemini_api_key):
         return f"Error processing image: {e}"
 
 # ---------------------------
-# Process message function for chat interface
+# Gradio Chatbot Function
 # ---------------------------
-def process_message(message, history, uploaded_image=None):
-    user_query = message
-
-    # Show typing indicator
-    yield {"role": "assistant", "content": "Analyzing your request..."}
-    
+def process_chat(user_query, image_file):
     # Branch: Image/Graph Analysis
-    if uploaded_image is not None:
-        file_path = uploaded_image.name if hasattr(uploaded_image, "name") else uploaded_image
-        response = analyze_image(file_path, gemini_api_key)
-        yield {"role": "assistant", "content": response}
-        return
-
-    # Check for image analysis request without uploaded image
     image_triggers = ["upload image", "analyze image", "upload graph", "analyze graph", "upload chart", "analyze chart"]
-    if any(trigger in user_query.lower() for trigger in image_triggers) and uploaded_image is None:
-        yield {"role": "assistant", "content": "Please upload an image file using the upload button to analyze charts or graphs."}
-        return
+    if image_file is not None or any(trigger in user_query.lower() for trigger in image_triggers):
+        if image_file is None:
+            return "No image provided. Please upload an image file."
+        else:
+            file_path = image_file.name if hasattr(image_file, "name") else image_file
+            return analyze_image(file_path, gemini_api_key)
 
     # Branch: Sentiment Analysis
     if "sentiment analysis" in user_query.lower():
         company = extract_company_name_for_sentiment(user_query)
         if company:
-            sentiment = perform_sentiment_analysis(company, news_api_key, gemini_api_key)
-            yield {"role": "assistant", "content": f"📊 **Sentiment Analysis for {company}**:\n\n{sentiment}"}
-            return
+            return perform_sentiment_analysis(company, news_api_key, gemini_api_key)
         else:
-            yield {"role": "assistant", "content": "I couldn't identify the company name for sentiment analysis. Could you rephrase your question?"}
-            return
+            return "Unable to extract company name for sentiment analysis."
 
     # Branch: Fetch News Headlines
     if "news" in user_query.lower():
         company = extract_company_name_for_news(user_query)
         if company:
-            news = get_stock_news(company, news_api_key)
-            yield {"role": "assistant", "content": news}
-            return
+            return get_stock_news(company, news_api_key)
         else:
-            yield {"role": "assistant", "content": "Please specify the company name to fetch news. For example: 'Show me news about Apple'"}
-            return
+            return "Please specify the company name to fetch news."
 
     # Branch: Direct Stock Price Query
     ticker = extract_stock_symbol(user_query, gemini_api_key)
     if ticker and ("stock price" in user_query.lower() or "price of" in user_query.lower() or "quote for" in user_query.lower()):
-        response = get_stock_quote_alpha_vantage(ticker, av_api_key)
-        yield {"role": "assistant", "content": response}
-        return
+        return get_stock_quote_alpha_vantage(ticker, av_api_key)
 
     # Regular Flow: Retrieve context and pass query to Gemini LLM
     context = retrieve_context(user_query, top_k=2)
-    
-    # Generate a more conversational response using the context
-    combined_prompt = (
-        f"You are a friendly and helpful financial assistant. Use the provided context to answer the question in a conversational tone. "
-        f"If you don't know the answer, just say so without making up information.\n\n"
-        f"Context:\n{context}\n\n"
-        f"User Query: {user_query}\n\n"
-        f"Answer in a helpful, conversational tone:"
-    )
-    
+    combined_prompt = f"Context:\n{context}\n\nUser Query: {user_query}\n\nAnswer:"
     answer = call_gemini_llm(combined_prompt, gemini_api_key)
-    yield {"role": "assistant", "content": answer}
+    return answer
 
 # ---------------------------
 # API Keys (Replace with your actual keys or use environment variables)
 # ---------------------------
-gemini_api_key = "AIzaSyB_u-Y8O422aIKG5ga_Ae7bN8q-6YKnx8E"  # Your Gemini API key
-av_api_key = "4MK98IQRF8RTSYQ3"                           # Your Alpha Vantage API key
-news_api_key = "1a0c8951c92b4906b50f9dc0b1186174"         # Your NewsAPI key
+gemini_api_key = "AIzaSyB_u-Y8O422aIKG5ga_Ae7bN8q-6YKnx8E"          # Your Gemini API key
+av_api_key = "4MK98IQRF8RTSYQ3"         # Your Alpha Vantage API key
+news_api_key = "1a0c8951c92b4906b50f9dc0b1186174"
 
 # ---------------------------
-# Create Gradio Chat Interface
+# Create Gradio Interface
 # ---------------------------
-with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
-    gr.Markdown(
-    """
-    # 💹 Financial Assistant
-    
-    Welcome to your AI-powered financial assistant! You can:
-    
-    - Ask about stock prices: "What's the stock price of Tesla?"
-    - Request news: "Show me news about Apple"
-    - Perform sentiment analysis: "Do a sentiment analysis on Microsoft stock"
-    - Upload charts for analysis: "Analyze this chart" + upload an image
-    - Ask general financial questions: "What's happening with Bitcoin?"
-    """
-    )
-    
-    chatbot = gr.Chatbot(
-        avatar_images=[None, "https://i.postimg.cc/2j3QT37V/fin-bot-avatar.png"],
-        height=500,
-        show_copy_button=True,
-        type="messages"
-    )
-    
-    with gr.Row():
-        msg = gr.Textbox(
-            placeholder="Ask me anything about finance, stocks, or news...", 
-            container=False,
-            scale=10,
-            show_label=False
-        )
-        clear = gr.ClearButton([msg, chatbot], value="🗑️", scale=1)
-    
-    upload_button = gr.UploadButton(
-        "📊 Upload Chart for Analysis", 
-        file_types=["image"], 
-        file_count="single",
-    )
-    
-    file_output = gr.Image(type="filepath", visible=False)
-    
-    # Connect the upload button to store the file path
-    upload_button.upload(
-        lambda file: file.name if file else None,
-        upload_button,
-        file_output,
-    )
-    
-    def clear_upload():
-        return None
-        
-    msg.submit(
-        process_message, 
-        [msg, chatbot, file_output], 
-        [chatbot]
-    ).then(
-        clear_upload, 
-        None, 
-        file_output
-    )
-    
-    # Example questions for quick access
-    gr.Examples(
-        examples=[
-            "What's the stock price of Apple?",
-            "Show me news about Tesla",
-            "What's happening with Bitcoin lately?",
-            "Do a sentiment analysis on Amazon stock",
-            "What are the current market trends for tech stocks?",
-            "How have small-cap stocks performed this quarter?",
-        ],
-        inputs=msg
-    )
-    
-    gr.Markdown("""
-    ### 📝 Tips
-    - For real-time stock quotes, ask: "What's the price of [COMPANY]?"
-    - To analyze charts, click the upload button and then ask for analysis
-    - Get the latest news by asking: "News about [COMPANY]"
-    """)
+iface = gr.Interface(
+    fn=process_chat,
+    inputs=[
+        gr.Textbox(label="Enter your query", placeholder="Type your financial query here..."),
+        gr.File(label="Upload image (optional)", file_types=[".png", ".jpg", ".jpeg"])
+    ],
+    outputs="text",
+    title="Financial Assistant Chatbot",
+    description="Ask questions about stocks, news, and perform image analysis on financial charts."
+)
 
-# Launch the app
-demo.queue().launch()
+iface.launch()
