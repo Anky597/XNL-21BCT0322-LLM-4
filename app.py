@@ -344,19 +344,19 @@ def process_message(message, history, uploaded_image=None):
     user_query = message
 
     # Show typing indicator
-    yield "Analyzing your request..."
+    yield {"role": "assistant", "content": "Analyzing your request..."}
     
     # Branch: Image/Graph Analysis
     if uploaded_image is not None:
         file_path = uploaded_image.name if hasattr(uploaded_image, "name") else uploaded_image
         response = analyze_image(file_path, gemini_api_key)
-        yield response
+        yield {"role": "assistant", "content": response}
         return
 
     # Check for image analysis request without uploaded image
     image_triggers = ["upload image", "analyze image", "upload graph", "analyze graph", "upload chart", "analyze chart"]
     if any(trigger in user_query.lower() for trigger in image_triggers) and uploaded_image is None:
-        yield "Please upload an image file using the upload button to analyze charts or graphs."
+        yield {"role": "assistant", "content": "Please upload an image file using the upload button to analyze charts or graphs."}
         return
 
     # Branch: Sentiment Analysis
@@ -364,10 +364,10 @@ def process_message(message, history, uploaded_image=None):
         company = extract_company_name_for_sentiment(user_query)
         if company:
             sentiment = perform_sentiment_analysis(company, news_api_key, gemini_api_key)
-            yield f"📊 **Sentiment Analysis for {company}**:\n\n{sentiment}"
+            yield {"role": "assistant", "content": f"📊 **Sentiment Analysis for {company}**:\n\n{sentiment}"}
             return
         else:
-            yield "I couldn't identify the company name for sentiment analysis. Could you rephrase your question?"
+            yield {"role": "assistant", "content": "I couldn't identify the company name for sentiment analysis. Could you rephrase your question?"}
             return
 
     # Branch: Fetch News Headlines
@@ -375,17 +375,17 @@ def process_message(message, history, uploaded_image=None):
         company = extract_company_name_for_news(user_query)
         if company:
             news = get_stock_news(company, news_api_key)
-            yield news
+            yield {"role": "assistant", "content": news}
             return
         else:
-            yield "Please specify the company name to fetch news. For example: 'Show me news about Apple'"
+            yield {"role": "assistant", "content": "Please specify the company name to fetch news. For example: 'Show me news about Apple'"}
             return
 
     # Branch: Direct Stock Price Query
     ticker = extract_stock_symbol(user_query, gemini_api_key)
     if ticker and ("stock price" in user_query.lower() or "price of" in user_query.lower() or "quote for" in user_query.lower()):
         response = get_stock_quote_alpha_vantage(ticker, av_api_key)
-        yield response
+        yield {"role": "assistant", "content": response}
         return
 
     # Regular Flow: Retrieve context and pass query to Gemini LLM
@@ -401,7 +401,7 @@ def process_message(message, history, uploaded_image=None):
     )
     
     answer = call_gemini_llm(combined_prompt, gemini_api_key)
-    yield answer
+    yield {"role": "assistant", "content": answer}
 
 # ---------------------------
 # API Keys (Replace with your actual keys or use environment variables)
