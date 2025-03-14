@@ -10,6 +10,7 @@ pinned: false
 ---
 
 ![Alt text](Project_Wireframe.png)
+![Alt text](chat_boat.png)
 
 # Financial Assistant Chatbot
 
@@ -89,13 +90,16 @@ This project is a Gradio-based web application designed to answer financial quer
 
 ## LLM Fine-Tuning and Prompt Engineering
 
-### Fine-Tuning vs. Prompt Engineering
+### Fine-Tuning and Prompt Engineering
 
-* **Fine-Tuning:** Direct fine-tuning of large language models like Gemini is typically handled on the backend by the provider. In this project, we rely on prompt engineering to steer the model’s output.
-* **Prompt Engineering Techniques:**
-    * **Role Specification:** Prompts often begin with a statement like “You are a financial analyst…” to set the context.
-    * **Clear Instructions:** Each branch of the logic (image analysis, sentiment analysis, ticker conversion) constructs specific prompts to direct the LLM.
-    * **Context Inclusion:** For general queries, relevant financial documents are fetched from a vector database and included in the prompt to guide the LLM’s response.
+* **Fine-Tuning:**  
+Direct fine-tuning of large language models like Gemini is typically handled on the backend by the provider.
+CSV Dataset
+* **Fine-Tuning: In this project, we also implement fine-tuning using CSV datasets containing domain-specific financial data, terminology, and example queries with their corresponding responses.
+* **This creates a more specialized model that better understands financial contexts and terminology specific to our application.
+* **Prompt Engineering Techniques:
+* **Role Specification: Prompts often begin with a statement like "You are a financial analyst…" to set the context.
+* **Clear Instructions: Each branch of the logic (image analysis, sentiment analysis, ticker conversion) constructs specific prompts to direct the LLM.
 
 ### Customizing Prompts
 
