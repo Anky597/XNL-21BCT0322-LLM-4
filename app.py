@@ -359,9 +359,9 @@ def process_chat(user_query, image_file):
 # ---------------------------
 # API Keys (set these in your environment)
 # ---------------------------
-gemini_api_key = os.environ.get("GEMINI_API_KEY")
-av_api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
-news_api_key = os.environ.get("NEWS_API_KEY")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+av_api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+news_api_key = os.getenv("NEWS_API_KEY")
 
 # ---------------------------
 # Enhanced Gradio Interface using Blocks and Tabs
