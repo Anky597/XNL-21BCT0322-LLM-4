@@ -8,7 +8,7 @@ sdk_version: 5.21.0
 app_file: app.py
 pinned: false
 ---
-Financial Assistant Chatbot Documentation
+**Financial Assistant Chatbot Documentation**
 1. Overview
 The Financial Assistant Chatbot is a Gradio‑based web application designed to answer financial queries by combining multiple data sources and processing methods. It integrates:
 Gradio UI for user interaction.
