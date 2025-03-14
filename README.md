@@ -134,6 +134,23 @@ The application’s main function `process_chat(user_query, image_file)` uses a 
 * **API Error Handling:** Each API call (Gemini LLM, Alpha Vantage, NewsAPI) is wrapped in `try-except` blocks to catch and return descriptive error messages.
 * **Graceful Fallback:** If specific branches (like ticker extraction or sentiment analysis) fail to extract necessary information, the system responds with a clear fallback message instructing the user on how to modify their query.
 
-## Summary
+## Development Code (Base Fine Tune LLM)
 
-This project integrates multiple data sources and processing techniques to deliver a responsive financial assistant chatbot.
+```python
+## v 6: -
+import google.generativeai as genai
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
+import requests
+import re
+from PIL import Image
+import base64
+
+# ... (rest of the code provided) ...
+
+gemini_api_key =     # Your Gemini API key
+av_api_key =         # Your Alpha Vantage API key
+news_api_key = 
+
+chatbot(gemini_api_key, av_api_key, news_api_key)
