@@ -383,7 +383,6 @@ with gr.Blocks(css=".gradio-container { max-width: 900px; margin: auto; }") as d
     with gr.Tabs():
         with gr.TabItem("Chat Query"):
             query_input = gr.Textbox(label="Enter your query", placeholder="Type your financial query here...")
-            chat_output = gr.Textbox(label="Response")
         with gr.TabItem("Image Analysis"):
             image_input = gr.File(label="Upload image (PNG, JPG, JPEG)")
             image_output = gr.Textbox(label="Image Analysis Output")
@@ -404,3 +403,4 @@ with gr.Blocks(css=".gradio-container { max-width: 900px; margin: auto; }") as d
 
 # Launch the enhanced interface
 demo.launch()
+ 
