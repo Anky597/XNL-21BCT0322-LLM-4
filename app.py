@@ -168,7 +168,7 @@ documents = [
 doc_texts = [doc["text"] for doc in documents]
 doc_embeddings = embedding_model.encode(doc_texts, convert_to_numpy=True).astype("float32")
 dimension = doc_embeddings.shape[1]
-nlist = 2  # Reduced number of clusters for small dataset
+nlist = 10  # Number of clusters; can be tuned based on dataset size
 
 # Create a quantizer for L2 distance (similar to IndexFlatL2)
 quantizer = faiss.IndexFlatL2(dimension)
@@ -207,7 +207,8 @@ def convert_company_to_ticker(company_name, gemini_api_key):
     return ticker.strip().upper()
 
 def extract_stock_symbol(query, gemini_api_key):
-    pattern = r"(?:price of|stock price for|quote for)\s+([A-Za-z]+)"
+    # Updated regex to also match "stock price of"
+    pattern = r"(?:price of|stock price of|stock price for|quote for)\s+([A-Za-z]+)"
     match = re.search(pattern, query, re.IGNORECASE)
     if match:
         candidate = match.group(1).strip()
@@ -322,7 +323,7 @@ def get_stock_news(company, news_api_key, count=5):
     return result
 
 # ---------------------------
-# Analyze Uploaded Image/Graph Functionality
+# Analyze Uploaded Image/Graph Functionality (Direct Image Upload to Gemini LLM)
 # ---------------------------
 def analyze_image(file_path, gemini_api_key):
     try:
@@ -340,19 +341,10 @@ def analyze_image(file_path, gemini_api_key):
         return f"Error processing image: {e}"
 
 # ---------------------------
-# API Keys (Replace with your actual keys or use environment variables)
-# ---------------------------
-
-
-gemini_api_key = "AIzaSyB_u-Y8O422aIKG5ga_Ae7bN8q-6YKnx8E"          # Your Gemini API key
-av_api_key = "4MK98IQRF8RTSYQ3"         # Your Alpha Vantage API key
-news_api_key = "1a0c8951c92b4906b50f9dc0b1186174"
-
-# ---------------------------
 # Gradio Chatbot Function
 # ---------------------------
 def process_chat(user_query, image_file):
-    # Check if an image file was provided or if the query indicates image analysis.
+    # Branch: Image/Graph Analysis
     image_triggers = ["upload image", "analyze image", "upload graph", "analyze graph", "upload chart", "analyze chart"]
     if image_file is not None or any(trigger in user_query.lower() for trigger in image_triggers):
         if image_file is None:
@@ -377,15 +369,23 @@ def process_chat(user_query, image_file):
         else:
             return "Please specify the company name to fetch news."
 
-    # Regular Flow: Retrieve context and fetch stock data if applicable.
-    context = retrieve_context(user_query, top_k=2)
+    # Branch: Direct Stock Price Query
     ticker = extract_stock_symbol(user_query, gemini_api_key)
-    stock_info = ""
-    if ticker:
-        stock_info = "\n" + get_stock_quote_alpha_vantage(ticker, av_api_key)
+    if ticker and ("stock price" in user_query.lower() or "price of" in user_query.lower() or "quote for" in user_query.lower()):
+        return get_stock_quote_alpha_vantage(ticker, av_api_key)
+
+    # Regular Flow: Retrieve context and pass query to Gemini LLM
+    context = retrieve_context(user_query, top_k=2)
     combined_prompt = f"Context:\n{context}\n\nUser Query: {user_query}\n\nAnswer:"
     answer = call_gemini_llm(combined_prompt, gemini_api_key)
     return answer
+
+# ---------------------------
+# API Keys (Replace with your actual keys or use environment variables)
+# ---------------------------
+gemini_api_key = "AIzaSyB_u-Y8O422aIKG5ga_Ae7bN8q-6YKnx8E"          # Your Gemini API key
+av_api_key = "4MK98IQRF8RTSYQ3"         # Your Alpha Vantage API key
+news_api_key = "1a0c8951c92b4906b50f9dc0b1186174"
 
 # ---------------------------
 # Create Gradio Interface
